@@ -1,483 +1,658 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
+import "./Appointments.css";
 
-function Appointments({
-  searchQuery = "",
-  openBooking = false,
-  setOpenBooking,
-}) {
-  const [appointments, setAppointments] = useState([
-    {
-      id: 1,
-      doctor: "Dr. Emily Watson",
-      specialty: "General Practice",
-      date: "18 Sep 2026",
-      time: "10:30 AM",
-      status: "Confirmed",
-      initials: "EW",
-    },
-    {
-      id: 2,
-      doctor: "Dr. Michael Brown",
-      specialty: "Cardiology",
-      date: "24 Sep 2026",
-      time: "02:00 PM",
-      status: "Confirmed",
-      initials: "MB",
-    },
-    {
-      id: 3,
-      doctor: "Dr. Olivia Smith",
-      specialty: "Dermatology",
-      date: "30 Sep 2026",
-      time: "11:15 AM",
-      status: "Pending",
-      initials: "OS",
-    },
-  ]);
+const doctors = [
+  {
+    id: 1,
+    name: "Dr. Olivia Smith",
+    specialty: "Dermatology",
+    experience: "8 years experience",
+    image: "https://i.pravatar.cc/150?img=47",
+  },
+  {
+    id: 2,
+    name: "Dr. Emily Watson",
+    specialty: "General Medicine",
+    experience: "10 years experience",
+    image: "https://i.pravatar.cc/150?img=32",
+  },
+  {
+    id: 3,
+    name: "Dr. Michael Brown",
+    specialty: "Cardiology",
+    experience: "12 years experience",
+    image: "https://i.pravatar.cc/150?img=12",
+  },
+];
 
-  const [showBooking, setShowBooking] =
-    useState(false);
+const timeSlots = [
+  "09:00 AM",
+  "10:00 AM",
+  "11:15 AM",
+  "12:30 PM",
+  "02:00 PM",
+  "03:30 PM",
+  "04:30 PM",
+  "05:30 PM",
+];
 
-  const [formData, setFormData] = useState({
-    doctor: "",
-    specialty: "",
-    date: "",
-    time: "",
+const bookedSlots = ["10:00 AM", "02:00 PM"];
+
+function AppointmentBooking() {
+  const today = new Date();
+
+  const [selectedDoctor, setSelectedDoctor] = useState(doctors[0]);
+  const [currentMonth, setCurrentMonth] = useState(
+    new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState("");
+  const [appointmentType, setAppointmentType] = useState("In-person");
+  const [reason, setReason] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [errors, setErrors] = useState({});
+  const [booking, setBooking] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+
+  const monthName = currentMonth.toLocaleString("default", {
+    month: "long",
   });
 
-  // Open booking modal when Dashboard requests it
-  useEffect(() => {
-    if (openBooking) {
-      setShowBooking(true);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      if (setOpenBooking) {
-        setOpenBooking(false);
-      }
+  const firstDay = new Date(year, month, 1).getDay();
+
+  const calendarDays = useMemo(() => {
+    const days = [];
+
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
     }
-  }, [openBooking, setOpenBooking]);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(day);
+    }
 
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
+    return days;
+  }, [firstDay, daysInMonth]);
+
+  const isPastDate = (day) => {
+    if (!day) return false;
+
+    const date = new Date(year, month, day);
+
+    const current = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    return date < current;
+  };
+
+  const isSelectedDate = (day) => {
+    if (!day || !selectedDate) return false;
+
+    return (
+      selectedDate.getFullYear() === year &&
+      selectedDate.getMonth() === month &&
+      selectedDate.getDate() === day
+    );
+  };
+
+  const handleDateSelect = (day) => {
+    if (!day || isPastDate(day)) return;
+
+    const date = new Date(year, month, day);
+
+    setSelectedDate(date);
+    setSelectedTime("");
+
+    setErrors((prev) => ({
+      ...prev,
+      date: "",
+      time: "",
     }));
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+  const goToPreviousMonth = () => {
+    const previous = new Date(year, month - 1, 1);
 
-    if (
-      !formData.doctor ||
-      !formData.specialty ||
-      !formData.date ||
-      !formData.time
-    ) {
+    const currentMonthStart = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    );
+
+    if (previous >= currentMonthStart) {
+      setCurrentMonth(previous);
+    }
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonth(new Date(year, month + 1, 1));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!selectedDoctor) {
+      newErrors.doctor = "Please select a doctor.";
+    }
+
+    if (!selectedDate) {
+      newErrors.date = "Please select an appointment date.";
+    }
+
+    if (!selectedTime) {
+      newErrors.time = "Please select an available time.";
+    }
+
+    if (!reason.trim()) {
+      newErrors.reason = "Please enter the reason for your appointment.";
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleBooking = (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
       return;
     }
 
-    const doctorName = formData.doctor.trim();
+    setBooking(true);
 
-    const initials = doctorName
-      .replace("Dr. ", "")
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-
-    const newAppointment = {
-      id: Date.now(),
-      doctor: doctorName.startsWith("Dr.")
-        ? doctorName
-        : `Dr. ${doctorName}`,
-      specialty: formData.specialty,
-      date: formData.date,
-      time: formData.time,
-      status: "Pending",
-      initials,
-    };
-
-    setAppointments((previous) => [
-      ...previous,
-      newAppointment,
-    ]);
-
-    setFormData({
-      doctor: "",
-      specialty: "",
-      date: "",
-      time: "",
-    });
-
-    setShowBooking(false);
+    setTimeout(() => {
+      setBooking(false);
+      setSuccess(true);
+    }, 700);
   };
 
-  const filteredAppointments =
-    appointments.filter((appointment) => {
-      const query = searchQuery
-        .trim()
-        .toLowerCase();
+  const resetBooking = () => {
+    setSuccess(false);
+    setSelectedDate(null);
+    setSelectedTime("");
+    setReason("");
+    setNotes("");
+    setErrors({});
+  };
 
-      if (!query) {
-        return true;
-      }
-
-      return (
-        appointment.doctor
-          .toLowerCase()
-          .includes(query) ||
-        appointment.specialty
-          .toLowerCase()
-          .includes(query)
-      );
-    });
+  const formattedDate = selectedDate
+    ? selectedDate.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
 
   return (
-    <div className="dashboard-page">
+    <div className="appointment-page">
+      <div className="appointment-container">
 
-      {/* ================= HEADER ================= */}
-
-      <section className="welcome-section">
-
-        <div>
-          <p className="welcome-label">
-            PATIENT PORTAL
-          </p>
-
-          <h1>
-            Appointments 📅
-          </h1>
-
-          <p>
-            Manage your upcoming healthcare
-            consultations.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="primary-btn"
-          onClick={() => setShowBooking(true)}
-        >
-          + Book Appointment
-        </button>
-
-      </section>
-
-
-      {/* ================= APPOINTMENT LIST ================= */}
-
-      <section className="appointments-section">
-
-        <div className="section-header">
-
+        {/* Header */}
+        <div className="appointment-header">
           <div>
-
-            <h3>
-              {searchQuery
-                ? "Search Results"
-                : "Your Appointments"}
-            </h3>
-
+            <span className="page-label">PATIENT PORTAL</span>
+            <h1>Book an Appointment</h1>
             <p>
-              {searchQuery
-                ? `Results for "${searchQuery}"`
-                : "Upcoming consultations and appointments"}
+              Choose your doctor, preferred date and available time slot.
             </p>
-
           </div>
 
-          <span className="appointment-count">
-            {filteredAppointments.length} appointments
-          </span>
-
+          <div className="header-icon">
+            📅
+          </div>
         </div>
 
+        {/* Progress */}
+        <div className="booking-progress">
+          <div className="progress-step active">
+            <span>1</span>
+            <p>Doctor</p>
+          </div>
 
-        <div className="appointment-list">
-
-          {filteredAppointments.length > 0 ? (
-
-            filteredAppointments.map(
-              (appointment) => (
-
-                <div
-                  className="appointment-card"
-                  key={appointment.id}
-                >
-
-                  <div className="doctor-avatar">
-                    {appointment.initials}
-                  </div>
-
-
-                  <div className="doctor-info">
-
-                    <strong>
-                      {appointment.doctor}
-                    </strong>
-
-                    <span>
-                      {appointment.specialty}
-                    </span>
-
-                  </div>
-
-
-                  <div className="appointment-date">
-
-                    <strong>
-                      {appointment.date}
-                    </strong>
-
-                    <span>
-                      {appointment.time}
-                    </span>
-
-                  </div>
-
-
-                  <span
-                    className={
-                      appointment.status === "Confirmed"
-                        ? "status confirmed"
-                        : "status pending"
-                    }
-                  >
-                    {appointment.status}
-                  </span>
-
-                </div>
-
-              )
-            )
-
-          ) : (
-
-            <div className="no-results">
-
-              <div>🔍</div>
-
-              <h3>
-                No appointments found
-              </h3>
-
-              <p>
-                Try searching for another doctor
-                or specialty.
-              </p>
-
-            </div>
-
-          )}
-
-        </div>
-
-      </section>
-
-
-      {/* ================= BOOK APPOINTMENT MODAL ================= */}
-
-      {showBooking && (
-
-        <div
-          className="profile-modal-overlay"
-          onClick={() =>
-            setShowBooking(false)
-          }
-        >
+          <div className="progress-line"></div>
 
           <div
-            className="profile-modal booking-modal"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            className={`progress-step ${
+              selectedDate ? "active" : ""
+            }`}
           >
-
-            {/* MODAL HEADER */}
-
-            <div className="profile-modal-header">
-
-              <div>
-
-                <span className="modal-label">
-                  APPOINTMENT
-                </span>
-
-                <h2>
-                  Book an Appointment
-                </h2>
-
-                <p>
-                  Choose your doctor and
-                  preferred consultation time.
-                </p>
-
-              </div>
-
-
-              <button
-                type="button"
-                className="profile-close-btn"
-                onClick={() =>
-                  setShowBooking(false)
-                }
-              >
-                ✕
-              </button>
-
-            </div>
-
-
-            {/* FORM */}
-
-            <form
-              className="booking-form"
-              onSubmit={handleSubmit}
-            >
-
-              {/* DOCTOR */}
-
-              <div className="form-group">
-
-                <label htmlFor="doctor">
-                  Doctor
-                </label>
-
-                <input
-                  id="doctor"
-                  name="doctor"
-                  type="text"
-                  placeholder="Enter doctor name"
-                  value={formData.doctor}
-                  onChange={handleChange}
-                  required
-                />
-
-              </div>
-
-
-              {/* SPECIALTY */}
-
-              <div className="form-group">
-
-                <label htmlFor="specialty">
-                  Specialty
-                </label>
-
-                <select
-                  id="specialty"
-                  name="specialty"
-                  value={formData.specialty}
-                  onChange={handleChange}
-                  required
-                >
-
-                  <option value="">
-                    Select specialty
-                  </option>
-
-                  <option value="General Practice">
-                    General Practice
-                  </option>
-
-                  <option value="Cardiology">
-                    Cardiology
-                  </option>
-
-                  <option value="Dermatology">
-                    Dermatology
-                  </option>
-
-                  <option value="Dentistry">
-                    Dentistry
-                  </option>
-
-                  <option value="Orthopaedics">
-                    Orthopaedics
-                  </option>
-
-                </select>
-
-              </div>
-
-
-              {/* DATE */}
-
-              <div className="form-group">
-
-                <label htmlFor="date">
-                  Date
-                </label>
-
-                <input
-                  id="date"
-                  name="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  required
-                />
-
-              </div>
-
-
-              {/* TIME */}
-
-              <div className="form-group">
-
-                <label htmlFor="time">
-                  Time
-                </label>
-
-                <input
-                  id="time"
-                  name="time"
-                  type="time"
-                  value={formData.time}
-                  onChange={handleChange}
-                  required
-                />
-
-              </div>
-
-
-              {/* BUTTONS */}
-
-              <div className="booking-buttons">
-
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() =>
-                    setShowBooking(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-
-                <button
-                  type="submit"
-                  className="primary-btn"
-                >
-                  Confirm Appointment
-                </button>
-
-              </div>
-
-            </form>
-
+            <span>2</span>
+            <p>Date & Time</p>
           </div>
 
+          <div className="progress-line"></div>
+
+          <div
+            className={`progress-step ${
+              reason ? "active" : ""
+            }`}
+          >
+            <span>3</span>
+            <p>Details</p>
+          </div>
         </div>
 
-      )}
+        <form onSubmit={handleBooking}>
 
+          {/* Doctor Section */}
+          <section className="booking-card">
+            <div className="section-title">
+              <div className="section-number">01</div>
+              <div>
+                <h2>Select Doctor</h2>
+                <p>Choose a healthcare professional</p>
+              </div>
+            </div>
+
+            <div className="doctor-grid">
+              {doctors.map((doctor) => (
+                <button
+                  type="button"
+                  key={doctor.id}
+                  className={`doctor-card ${
+                    selectedDoctor?.id === doctor.id
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() => {
+                    setSelectedDoctor(doctor);
+                    setErrors((prev) => ({
+                      ...prev,
+                      doctor: "",
+                    }));
+                  }}
+                >
+                  <img src={doctor.image} alt={doctor.name} />
+
+                  <div className="doctor-info">
+                    <h3>{doctor.name}</h3>
+                    <span>{doctor.specialty}</span>
+                    <small>{doctor.experience}</small>
+                  </div>
+
+                  <div className="doctor-check">
+                    {selectedDoctor?.id === doctor.id ? "✓" : ""}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {errors.doctor && (
+              <div className="error-message">
+                ⚠ {errors.doctor}
+              </div>
+            )}
+          </section>
+
+          {/* Date and Time */}
+          <section className="booking-card">
+            <div className="section-title">
+              <div className="section-number">02</div>
+              <div>
+                <h2>Select Date & Time</h2>
+                <p>Choose an available appointment slot</p>
+              </div>
+            </div>
+
+            <div className="date-time-layout">
+
+              {/* Calendar */}
+              <div className="calendar-container">
+                <div className="calendar-header">
+                  <button
+                    type="button"
+                    onClick={goToPreviousMonth}
+                    className="month-button"
+                  >
+                    ‹
+                  </button>
+
+                  <div>
+                    <strong>{monthName}</strong>
+                    <span>{year}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={goToNextMonth}
+                    className="month-button"
+                  >
+                    ›
+                  </button>
+                </div>
+
+                <div className="weekdays">
+                  <span>Sun</span>
+                  <span>Mon</span>
+                  <span>Tue</span>
+                  <span>Wed</span>
+                  <span>Thu</span>
+                  <span>Fri</span>
+                  <span>Sat</span>
+                </div>
+
+                <div className="calendar-grid">
+                  {calendarDays.map((day, index) => (
+                    <button
+                      type="button"
+                      key={index}
+                      disabled={!day || isPastDate(day)}
+                      className={`
+                        calendar-day
+                        ${!day ? "empty" : ""}
+                        ${isPastDate(day) ? "past" : ""}
+                        ${isSelectedDate(day) ? "selected-day" : ""}
+                      `}
+                      onClick={() => handleDateSelect(day)}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="calendar-legend">
+                  <span>
+                    <i className="legend-selected"></i>
+                    Selected
+                  </span>
+
+                  <span>
+                    <i className="legend-available"></i>
+                    Available
+                  </span>
+                </div>
+
+                {errors.date && (
+                  <div className="error-message">
+                    ⚠ {errors.date}
+                  </div>
+                )}
+              </div>
+
+              {/* Time */}
+              <div className="time-container">
+                <div className="time-header">
+                  <h3>Available Times</h3>
+
+                  {selectedDate && (
+                    <span>{formattedDate}</span>
+                  )}
+                </div>
+
+                {!selectedDate ? (
+                  <div className="time-empty">
+                    <div>🗓️</div>
+                    <p>Select a date first</p>
+                    <small>
+                      Available time slots will appear here.
+                    </small>
+                  </div>
+                ) : (
+                  <div className="time-grid">
+                    {timeSlots.map((time) => {
+                      const unavailable = bookedSlots.includes(time);
+
+                      return (
+                        <button
+                          type="button"
+                          key={time}
+                          disabled={unavailable}
+                          className={`time-slot ${
+                            selectedTime === time
+                              ? "selected-time"
+                              : ""
+                          } ${unavailable ? "unavailable" : ""}`}
+                          onClick={() => {
+                            setSelectedTime(time);
+                            setErrors((prev) => ({
+                              ...prev,
+                              time: "",
+                            }));
+                          }}
+                        >
+                          <span>{time}</span>
+
+                          {unavailable ? (
+                            <small>Booked</small>
+                          ) : (
+                            <small>Available</small>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {errors.time && (
+                  <div className="error-message">
+                    ⚠ {errors.time}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Patient Details */}
+          <section className="booking-card">
+            <div className="section-title">
+              <div className="section-number">03</div>
+
+              <div>
+                <h2>Appointment Details</h2>
+                <p>Tell us a little about your visit</p>
+              </div>
+            </div>
+
+            <div className="form-grid">
+
+              <div className="form-group">
+                <label>Appointment Type</label>
+
+                <div className="appointment-types">
+                  <button
+                    type="button"
+                    className={
+                      appointmentType === "In-person"
+                        ? "type-button active"
+                        : "type-button"
+                    }
+                    onClick={() =>
+                      setAppointmentType("In-person")
+                    }
+                  >
+                    🏥
+                    <span>In-person</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      appointmentType === "Video consultation"
+                        ? "type-button active"
+                        : "type-button"
+                    }
+                    onClick={() =>
+                      setAppointmentType("Video consultation")
+                    }
+                  >
+                    💻
+                    <span>Video consultation</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="reason">
+                  Reason for Appointment *
+                </label>
+
+                <input
+                  id="reason"
+                  type="text"
+                  placeholder="e.g. Skin consultation"
+                  value={reason}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+
+                    setErrors((prev) => ({
+                      ...prev,
+                      reason: "",
+                    }));
+                  }}
+                />
+
+                {errors.reason && (
+                  <div className="field-error">
+                    {errors.reason}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group full-width">
+                <label htmlFor="notes">
+                  Additional Notes
+                </label>
+
+                <textarea
+                  id="notes"
+                  rows="4"
+                  placeholder="Add any additional information for the doctor..."
+                  value={notes}
+                  onChange={(e) =>
+                    setNotes(e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Summary */}
+          <section className="summary-card">
+            <div className="summary-header">
+              <div>
+                <span>APPOINTMENT SUMMARY</span>
+                <h2>Review your booking</h2>
+              </div>
+
+              <div className="secure-badge">
+                🔒 Secure
+              </div>
+            </div>
+
+            <div className="summary-content">
+              <div className="summary-doctor">
+                <img
+                  src={selectedDoctor.image}
+                  alt={selectedDoctor.name}
+                />
+
+                <div>
+                  <strong>{selectedDoctor.name}</strong>
+                  <span>{selectedDoctor.specialty}</span>
+                </div>
+              </div>
+
+              <div className="summary-details">
+                <div>
+                  <small>Date</small>
+                  <strong>
+                    {formattedDate || "Not selected"}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>Time</small>
+                  <strong>
+                    {selectedTime || "Not selected"}
+                  </strong>
+                </div>
+
+                <div>
+                  <small>Type</small>
+                  <strong>{appointmentType}</strong>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="confirm-button"
+              disabled={booking}
+            >
+              {booking ? (
+                "Booking..."
+              ) : (
+                <>
+                  Confirm Appointment
+                  <span>→</span>
+                </>
+              )}
+            </button>
+          </section>
+        </form>
+      </div>
+
+      {/* Success Modal */}
+      {success && (
+        <div className="modal-overlay">
+          <div className="success-modal">
+            <div className="success-icon">✓</div>
+
+            <h2>Appointment Confirmed!</h2>
+
+            <p>
+              Your appointment has been successfully booked.
+            </p>
+
+            <div className="confirmation-box">
+              <div>
+                <span>Doctor</span>
+                <strong>{selectedDoctor.name}</strong>
+              </div>
+
+              <div>
+                <span>Date</span>
+                <strong>{formattedDate}</strong>
+              </div>
+
+              <div>
+                <span>Time</span>
+                <strong>{selectedTime}</strong>
+              </div>
+
+              <div>
+                <span>Appointment Type</span>
+                <strong>{appointmentType}</strong>
+              </div>
+            </div>
+
+            <div className="confirmation-id">
+              Confirmation ID:
+              <strong> UKH-{Math.floor(100000 + Math.random() * 900000)}</strong>
+            </div>
+
+            <button
+              className="done-button"
+              onClick={resetBooking}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default Appointments;
+export default AppointmentBooking;
